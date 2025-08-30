@@ -1,34 +1,25 @@
-This code is a multi-motor control system based on STM32F10x, mainly used for controlling brushless motors, stepper motors and achieving vehicle motion control. Here is an analysis of the overall architecture: 
-Core Architecture
-1. Hardware Driver Layer
-CAN Communication (MyCAN.c/h): Used for receiving control instructions 
-Serial Port Communication (usart.c/h): Debugging and Data Transmission 
-DAC8568 (DAC8568.c/h): 16-bit DAC for controlling the speed of brushless motors 
-Stepper Motor Driver (STEP.c/h): Controls the movement of stepper motors 
-GPIO control: Various enable, brake, and direction control pins 
-2. Communication Protocol
-CAN Bus Protocol: Main Control Channel, Standard Frame with ID of 0x11 
-Modbus-like protocol: Custom instruction format AC 03 [Function code] [Data] [CRC] 
-3. Control Function Module
-Motion Control (Control_motor())
-Forward/Backward: Controlled by brushless motor speed. 
-Steering control: Stepper motor controls left and right steering. 
-Gear control: 5 speed gears (0-4 gears) 
-Brake system: Mechanical brake control 
-Motor Control Function
-Brushspeed(): Brushless Motor PWM Speed Control 
-BrushDIR(): Direction Control 
-control_dir(): Overall steering control 
-control_step(): Extension rod control 
-brake()/Outbrake(): Brake Control 
-back()/Outback(): Reverse Control 
-4. Data Flow text
-CAN reception → Instruction parsing → Motor control → Status feedback
-5. Instruction format example c
-// Forward command: AC 03 01 01 01 [CRC]
-// Turning command: AC 03 05 01 01 [CRC]
-// Speed setting: AC 03 04 00 02 [CRC] (2nd gear)
-6. Safety features
-CRC verification ensures the integrity of the commands 
-Emergency stop brake function 
-Software reset mechanism
+此代码是一个基于 STM32F10x 的多电机控制系统，主要用于控制无刷电机、步进电机，并实现车辆运动控制。以下是对其整体架构的分析：
+1. 硬件驱动层
+CAN通信 (MyCAN.c/h): 用于接收控制指令
+串口通信 (usart.c/h): 调试和数据传输
+DAC8568 (DAC8568.c/h): 16位DAC控制无刷电机速度
+步进电机驱动 (STEP.c/h): 控制步进电机运动
+GPIO控制: 各种使能、刹车、方向控制引脚
+2. 通信协议
+CAN总线协议: 主控制通道，ID为0x111的标准帧
+Modbus-like协议: 自定义指令格式 AC 03 [功能码] [数据] [CRC]
+3. 控制功能模块
+运动控制 (Control_motor())
+前进/后退: 通过无刷电机速度控制
+转向控制: 步进电机控制左右转向
+档位控制: 5个速度档位(0-4档)
+刹车系统: 机械刹车控制
+电机控制函数
+Brushspeed(): 无刷电机PWM调速
+BrushDIR(): 方向控制
+control_dir(): 整体转向控制
+control_step(): 伸缩杆控制
+brake()/Outbrake(): 刹车控制
+back()/Outback(): 倒车控制
+4. 数据流
+CAN接收 → 指令解析 → 电机控制 → 状态反馈
