@@ -1,0 +1,32 @@
+#ifndef _DAC8568_H_
+#define _DAC8568_H_
+#include "stm32f10x.h"                  // Device header
+#include "sys.h" 
+
+extern int8_t ZeroCode[4];
+
+/* dac8568电压输出范围：±5V */
+#define dac8568_range       10000.0	/* dac8568量程 */
+#define dac8568_shifting    5000.0	/* dac8568偏移 */
+
+	#define	SPI_RCC					RCC_APB2Periph_GPIOC
+	#define SPI_GPIOx				GPIOC
+
+	#define SPI_CS_PIN			GPIO_Pin_3				
+	#define SPI_CLK_PIN			GPIO_Pin_1							
+	#define SPI_MOSI_PIN		GPIO_Pin_2	
+	
+/*********************************引脚声明*********************************************/
+#define dac8568_sync_l      GPIO_WriteBit(GPIOC,GPIO_Pin_3,Bit_RESET)
+#define dac8568_sync_h      GPIO_WriteBit(GPIOC,GPIO_Pin_3,Bit_SET)
+#define dac8568_sclk_l      GPIO_WriteBit(GPIOC,GPIO_Pin_1,Bit_RESET)
+#define dac8568_sclk_h      GPIO_WriteBit(GPIOC,GPIO_Pin_1,Bit_SET)
+#define dac8568_din_l       GPIO_WriteBit(GPIOC,GPIO_Pin_2,Bit_RESET)
+#define dac8568_din_h       GPIO_WriteBit(GPIOC,GPIO_Pin_2,Bit_SET)
+/*******************************外部函数声明*******************************************/
+extern void dac8568_init(void);
+extern void dac8568_write_data(uint32_t data);
+extern void dac8568_write_channel(uint8_t ch, uint16_t data);
+extern void dac8568_write_all_channel(uint16_t data);
+
+#endif

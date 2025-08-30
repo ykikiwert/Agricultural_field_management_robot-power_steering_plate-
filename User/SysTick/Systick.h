@@ -1,0 +1,10 @@
+#ifndef __BSP_SYSTICK_H
+#define __BSP_SYSTICK_H
+
+#include "stm32f10x.h"
+#include "core_cm3.h"
+
+void delay_us(uint32_t us);
+void delay_ms(uint32_t ms);
+void SOFT_Delay(__IO u32 nCount);
+#endif /* __BSP_SYSTICK_H */

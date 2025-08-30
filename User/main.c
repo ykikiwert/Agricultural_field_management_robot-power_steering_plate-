@@ -1,0 +1,279 @@
+#include "includes.h"
+#include "usart.h"
+#include "STEP.h"
+#include "Systick.h"
+#include "sys.h"
+#include "DAC8568.h"  
+#include "stm32f10x.h"                  // Device header
+#include "core_cm3.h"
+#include "gpio.h"
+#include "MyCAN.h"
+uint8_t count=0;
+uint8_t Dat=0x00;
+uint8_t flag = 0;
+uint8_t Sflag=0;
+uint8_t Bflag=0;   //无刷电机
+int16_t Num;
+uint8_t j;
+uint32_t D_Data[8];
+extern int16_t ZeroCode[8];
+float Vol=0;
+uint8_t Tbrake[8]={0x5A,0XA5,0X05,0X82,0X51,0X40,0XCA,0XC7};
+uint8_t Ebrake[8]={0x5A,0XA5,0X05,0X82,0X51,0X40,0XB7,0XF1};
+uint8_t TSpeed0[8]={0x5A,0XA5,0X05,0X82,0X51,0X30,0X00,0X00};
+uint8_t TSpeed1[8]={0x5A,0XA5,0X05,0X82,0X51,0X30,0X00,0X01};
+uint8_t TSpeed2[8]={0x5A,0XA5,0X05,0X82,0X51,0X30,0X00,0X02};
+uint8_t TSpeed3[8]={0x5A,0XA5,0X05,0X82,0X51,0X30,0X00,0X03};
+uint8_t TSpeed4[8]={0x5A,0XA5,0X05,0X82,0X51,0X30,0X00,0X04};
+uint32_t TxID = 0x333;
+uint8_t TxLength = 8;
+uint32_t RxID;
+uint8_t RxLength;
+uint8_t RxData[8];
+void Modbus_Analytical(uint8_t* UART_RX_BUF);                    
+void Control_motor(uint8_t* CAN_RX_BUF);
+void Brushspeed(uint8_t speed);
+void BrushDIR(uint8_t bdir);
+void control_step(void);
+void SoftwareReset(void);
+void brake(void);
+void Outbrake(void);
+void back(void);
+void Outback(void);
+void control_dir(void);
+void MyCAN_Receive(uint32_t *ID, uint8_t *Length, uint8_t *Data);
+
+int main(void)
+{
+	Brush_GPIO_Init();
+	USART_Config();
+	dac8568_init();	
+    MyCAN_Init();
+	while(1)
+	{
+		  if (MyCAN_ReceiveFlag())
+		  {
+			MyCAN_Receive(&RxID, &RxLength, RxData);
+		  }
+	}
+}
+//void USART1_IRQHandler(void)
+//{
+//	
+//	if(USART_GetITStatus(USART1,USART_IT_IDLE) == SET)
+//	{
+//		DMA_Cmd(DMA1_Channel5,DISABLE);	
+//		Control_motor(USART1_RX_BUF);
+//		DMA_SetCurrDataCounter(DMA1_Channel5,USART1_RX_SIZE);
+//		DMA_Cmd(DMA1_Channel5,ENABLE);
+//		USART_ReceiveData(USART1);
+//		USART_ClearFlag(USART1,USART_FLAG_IDLE);	
+//	}
+//}
+void MyCAN_Receive(uint32_t *ID, uint8_t *Length, uint8_t *Data)
+{
+	CanRxMsg RxMessage;
+	
+	CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);
+	
+	  if (RxMessage.IDE == CAN_Id_Standard)
+	if (RxMessage.IDE == CAN_Id_Standard&& RxMessage.StdId == 0x111)
+	{
+		*ID = RxMessage.StdId;
+		if (RxMessage.RTR == CAN_RTR_Data)
+	   { 
+		*Length = RxMessage.DLC;
+		for (uint8_t i = 0; i < *Length; i ++)
+		{
+			Data[i] = RxMessage.Data[i];
+		}
+		Control_motor(Data);  
+	   }
+	    else
+	    {
+		   //...
+	    }
+	}
+	else
+	{
+		//...
+	}
+	
+	
+}
+//接收指令控制电机
+void Control_motor(uint8_t* CAN_RX_BUF)  
+{
+	uint8_t H;
+	uint8_t L;
+	H = CRC16_MODBUS(CAN_RX_BUF,6)/256;
+	L = CRC16_MODBUS(CAN_RX_BUF,6)%256;
+	if(CAN_RX_BUF[0]==0XAC&&CAN_RX_BUF[2]==0X03)
+	{
+		 if(CAN_RX_BUF[6]==L&&CAN_RX_BUF[7]==H)
+		 {
+			switch(CAN_RX_BUF[3])
+			{
+				case 0x01:switch(CAN_RX_BUF[4])
+				         {
+							 case 0x01:if(CAN_RX_BUF[5]==0x01){Brushspeed(2);USART_SendByte(USART1, 0xE2);}     //前进
+						               else if(CAN_RX_BUF[5]==0x00) {Brushspeed(0);}break;   //可不加
+					         case 0x02:if(CAN_RX_BUF[5]==0x01){BrushDIR(1);USART_SendByte(USART1, 0x00);}     //左转
+						               else if(CAN_RX_BUF[5]==0x00) {}break;
+					         case 0x03:if(CAN_RX_BUF[5]==0x01){back();}     //倒车
+						               else if(CAN_RX_BUF[5]==0x00) {Outback();}break;
+					         case 0x04:if(CAN_RX_BUF[5]==0x01){BrushDIR(2);}     //右转
+						               else if(CAN_RX_BUF[5]==0x00) {}break;
+					         case 0x05:if(CAN_RX_BUF[5]==0x01){brake();MyCAN_Transmit(TxID, TxLength,Tbrake);}    //刹车
+						               else if(CAN_RX_BUF[5]==0x00) {Outbrake();MyCAN_Transmit(TxID, TxLength,Ebrake);}break;//刹车释放
+					default:break;
+							 
+				         }
+				case 0x04:switch(CAN_RX_BUF[5])
+				         {
+							 case 0x00:Brushspeed(0);USART_SendByte(USART1, 0x55);MyCAN_Transmit(TxID, TxLength,TSpeed0);break;    //0  
+					         case 0x01:Brushspeed(1);MyCAN_Transmit(TxID, TxLength,TSpeed1);break;     //1档     
+					         case 0x02:Brushspeed(2);MyCAN_Transmit(TxID, TxLength,TSpeed2);break;     //2档						              
+					         case 0x03:Brushspeed(3);MyCAN_Transmit(TxID, TxLength,TSpeed3);break;     //3档
+							 case 0x04:Brushspeed(4);MyCAN_Transmit(TxID, TxLength,TSpeed4);break;    //4档
+						    default:break;  	 
+				         }
+				case 0x05:switch(CAN_RX_BUF[4])
+				         {
+							 case 0x01:if(CAN_RX_BUF[5]==0x01){BrushDIR(1);}     //转向
+						               else if(CAN_RX_BUF[5]==0x00) {}break;  
+					         case 0x02:if(CAN_RX_BUF[5]==0x01){BrushDIR(2);}     //收回
+						               else if(CAN_RX_BUF[5]==0x00) {}break; 
+						 default:break;  
+				         }
+			}	
+			
+		 }
+	}
+}
+
+
+//无刷电机调速
+void Brushspeed(uint8_t speed)  
+{  
+    int16_t Vol;  
+    switch(speed)  
+    {  
+        case 0: Vol = 0; break;  
+        case 1: Vol = 1800; break;  
+        case 2: Vol = 3000; break;  
+        case 3: Vol = 3800; break;  
+        case 4: Vol = 3800;STR1=1;STR2=1;STR3=1;STR4=1; break;  
+        default: Vol = 0; // 或者其他默认值  
+    }  
+  
+    for (uint8_t j = 0; j < 4; j++)  
+    {  
+        uint16_t dac_value = (uint16_t)((Vol + dac8568_shifting - ZeroCode[j]) / dac8568_range * 65535);  
+        dac8568_write_channel(j, dac_value);  
+        delay_ms(1);   
+    }  
+}
+//小车整体转向
+void BrushDIR(uint8_t bdir)
+{
+	switch(bdir)
+	{
+		case 1:{flag=1;control_dir();}break; 
+		case 2:{flag=0;control_dir();}break;
+		default:for (uint8_t j = 0; j < 4; j++) {  
+                dac8568_write_channel(j, 0); // 默认DAC都为0  
+            }                                                                                
+	}
+}
+//整体转向
+void control_dir(void)
+{
+	Num=1800;              //数值在361的整数倍之内
+		Num%=1805;             //361的整数倍
+		if(flag == 1)
+		{
+			EN1=0;EN2=0;EN3=0;EN4=0;
+			if(Num >= 0)
+			{
+				STEP_Run(1, Num, 500);
+				delay_ms(1000);
+			}
+			else
+			{
+				STEP_Run(0, -Num, 500);
+				delay_ms(1000);
+			}
+			flag = 0;//完成后清除标志位等待下一次按键按下
+		}
+		else
+		{
+			EN1=1;EN2=1;EN3=1;EN4=1;
+		}
+	
+}
+//步进电机转向,用于伸缩杆
+void control_step(void)
+{
+	Num=1800;              //数值在361的整数倍之内
+		Num%=1805;             //361的整数倍
+		if(flag == 1)
+		{
+			EN1=0;EN2=0;EN3=0;EN4=0;
+			if(Num >= 0)
+			{
+				STEP_Run(1, Num, 500);
+				delay_ms(1000);
+			}
+			else
+			{
+				STEP_Run(0, -Num, 500);
+				delay_ms(1000);
+			}
+			flag = 0;//完成后清除标志位等待下一次按键按下
+		}
+		else
+		{
+			EN1=1;EN2=1;EN3=1;EN4=1;
+		}
+	
+}
+
+//软件自动复位
+void SoftwareReset(void)  
+{  
+    // 关闭所有中断（可选，如果希望立即复位而不等待中断处理完成）  
+    __set_FAULTMASK(1);  
+ 
+    // 触发系统复位  
+    NVIC_SystemReset();  
+}
+
+void brake(void)
+{
+    BR1 = 1; RE1 = 0;
+	BR2 = 1; RE2 = 0;
+	BR3 = 1; RE3 = 0;
+	BR4 = 1; RE4 = 0;	
+}
+void Outbrake(void)
+{
+	BR1 = 0; RE1 = 0;
+	BR2 = 0; RE2 = 0;
+	BR3 = 0; RE3 = 0;
+	BR4 = 0; RE4 = 0;
+	
+}
+void back(void)
+{
+	Brushspeed(0);delay_ms(1000);
+	RE1 = 1;RE2 = 1;RE3 = 1;RE4 = 1;delay_ms(1000);
+	if(RE1==1&&RE2==1&&RE3==1&&RE4==1)Brushspeed(2);	
+}
+void Outback(void)
+{
+	RE1 = 0;
+	RE2 = 0;
+	RE3 = 0;
+	RE4 = 0;
+}
