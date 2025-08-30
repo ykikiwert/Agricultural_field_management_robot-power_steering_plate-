@@ -22,4 +22,4 @@ control_step(): 伸缩杆控制
 brake()/Outbrake(): 刹车控制
 back()/Outback(): 倒车控制
 4. 数据流
-CAN接收 → 指令解析 → 电机控制 → 状态反馈
+CAN接收 → 指令解析 → 电机控制 → 状态反馈。
